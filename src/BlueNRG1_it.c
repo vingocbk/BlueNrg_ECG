@@ -97,7 +97,7 @@ void SysTick_Handler(void)
 		if(lSystickCounter >= freqReadEcg)
 		{
 			lSystickCounter = 0;
-			APP_FLAG_SET_CUSTOM(SEND_DATA_TO_BUFFER);
+			APP_FLAG_SET_CUSTOM(READ_DATA_ECG);
 		}
 	}
 

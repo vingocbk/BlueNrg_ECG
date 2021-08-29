@@ -211,6 +211,12 @@ NOTES:
 /** @} */
 /** \cond DOXYGEN_SHOULD_SKIP_THIS
  */
+/*
+	RED 		- RA 	- 	Right Arm
+	GREEN 	- LA 	- 	Left Arm
+	YELLOW 	- RL	-		Right Leg
+*/
+
 /* Includes ------------------------------------------------------------------*/
 #include <stdio.h>
 #include <string.h>
@@ -228,14 +234,19 @@ NOTES:
 
 /* External variables --------------------------------------------------------*/
 extern uint16_t chatServHandle, TXCharHandle, RXCharHandle;
-
+extern volatile uint16_t connection_handle;
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 #define BLE_CHAT_VERSION_STRING "1.0.0" 
 #define PRINT_INT(x)    ((int)(x))
 #define PRINT_FLOAT(x)  (x>0)? ((int) (((x) - PRINT_INT(x)) * 1000)) : (-1*(((int) (((x) - PRINT_INT(x)) * 1000))))
 
-#define FREG_READ_ECG 	4 //4ms
+
+#define DATA_SEND_BUFFER_SIZE 	2048
+
+
+
+#define DATA_
 
 /* Private macro -------------------------------------------------------------*/
 #define ADC_CONVERSION    (ADC_ConversionMode_Single)
@@ -246,7 +257,9 @@ extern uint16_t chatServHandle, TXCharHandle, RXCharHandle;
 #define ADC_CHECK_FLAG        (ADC_GetFlagStatus(ADC_FLAG_EOC))
 /* Private variables ---------------------------------------------------------*/
 volatile uint32_t lSystickCounter=0;
-volatile uint16_t freqReadEcg = FREG_READ_ECG;
+volatile uint16_t freqReadEcg = FREQ_READ_ECG_250;
+volatile uint16_t ble_add_buffer_start = 0, ble_add_buffer_end = ADDRESS_BUFFER_DATA_START;
+static uint8_t bufferSend[DATA_SEND_BUFFER_SIZE];		
 volatile uint16_t dataEcg=0;
 volatile BOOL sendataflag = FALSE;
 ADC_InitType xADC_InitType;
@@ -332,7 +345,7 @@ int main(void)
     /* Application tick */
     APP_Tick();
 		
-		if(APP_FLAG_CUSTOM(SEND_DATA_TO_APP_ENABLE))
+		if(APP_FLAG(CONNECTED) && APP_FLAG_CUSTOM(SEND_DATA_TO_APP_ENABLE))
 		{
 			Read_ADC();
 		}
@@ -365,51 +378,72 @@ int main(void)
 void Read_ADC(void)
 {
 	float adc_value = 0.0;
+	//printf("%d\r\n", dataEcg);
 	if(ADC_CHECK_FLAG)
 	{
-		if(GPIO_ReadBit(GPIO_Pin_13)==Bit_SET || GPIO_ReadBit(GPIO_Pin_14)==Bit_SET)
+		if(APP_FLAG_CUSTOM(READ_DATA_ECG))
 		{
-			printf("!\r\n");
-		}
-		else
-		{
-			/* Read converted data */
-			adc_value = ADC_GetConvertedData(xADC_InitType.ADC_Input, xADC_InitType.ADC_ReferenceVoltage);
-			
-			/* Print the ADC value converted */
-			if(xADC_InitType.ADC_Input == ADC_Input_TempSensor) {
-				//printf("ADC value: %d.%02d %cC\r\n", PRINT_INT(adc_value),PRINT_FLOAT(adc_value), 248);
+			//if(GPIO_ReadBit(GPIO_Pin_13)==Bit_SET || GPIO_ReadBit(GPIO_Pin_14)==Bit_SET)
+			if(0)
+			{
+				printf("!\r\n");
 			}
-			else {
-				dataEcg = (uint16_t)(ADC_CompensateOutputValue(adc_value)*1000.0);
-				//printf("%d\r\n", dataEcg);
-				//sendataflag = TRUE;
-				
-				if(APP_FLAG(CONNECTED))
+			else
+			{
+				/* Read converted data */
+				adc_value = ADC_GetConvertedData(xADC_InitType.ADC_Input, xADC_InitType.ADC_ReferenceVoltage);
+				//dataEcg = (uint16_t)(ADC_CompensateOutputValue(adc_value)*1000.0);
+				dataEcg++;
+				uint8_t byteSend[2];
+				byteSend[0] = dataEcg >> 8;
+				byteSend[1] = dataEcg & 0x00FF;
+				printf("%d\r\n", dataEcg);
+				if(APP_FLAG_CUSTOM(MODE_SEND_REAL_TIME))		//default is not set
 				{
-					if(APP_FLAG_CUSTOM(SEND_DATA_TO_BUFFER))
+					uint8_t length = 2;
+					//aci_gatt_update_char_value_ext(connection_handle,chatServHandle,TXCharHandle,1,length,0,length,byteSend);
+					aci_gatt_update_char_value(chatServHandle,TXCharHandle,0,length,byteSend);
+				}
+				else
+				{
+					bufferSend[ble_add_buffer_end] = byteSend[0];
+					ble_add_buffer_end++;
+					bufferSend[ble_add_buffer_end] = byteSend[1];
+					ble_add_buffer_end++;
+					
+					//every 120 byte will send 1 time
+					if(ble_add_buffer_end >= 120)
 					{
-						static uint8_t a[2];
-						//aci_gatt_update_char_value_ext(connection_handle,chatServHandle,TXCharHandle,1,1,0, 1,a);
-						a[0] = dataEcg >> 8;
-						a[1] = dataEcg & 0x00FF;
-						printf("%d\r\n", dataEcg);
-						aci_gatt_update_char_value(chatServHandle,TXCharHandle,0,2,a);
-						APP_FLAG_CLEAR_CUSTOM(SEND_DATA_TO_BUFFER);
+						//ble_add_buffer_end--;			// may be byte 121 must be '/0' then must do 121 byte to send 120 byte data
+						APP_FLAG_SET_CUSTOM(FULL_DATA_BUFFER);
 					}
 					
+					if(APP_FLAG_CUSTOM(FULL_DATA_BUFFER))		//start send all buffer data to App
+					{
+						//printf("Send Data\r\n");
+						//bufferSend[ADDRESS_BUFFER_SYNC_START] = DATA_BUFFER_SYNC_START;
+						//bufferSend[ble_add_buffer_end] = '\n';
+						NVIC_DisableIRQ(UART_IRQn);
+						while(ble_add_buffer_start < ble_add_buffer_end)
+						{
+							//printf("while %d\r\n", ble_add_buffer_start);
+							uint8_t length = MIN(20, ble_add_buffer_end - ble_add_buffer_start);
+							aci_gatt_update_char_value(chatServHandle,TXCharHandle,0,length,(uint8_t *)bufferSend+ble_add_buffer_start);
+							//aci_gatt_update_char_value_ext(connection_handle,chatServHandle,TXCharHandle,1,length,0, length,(uint8_t *)bufferSend+ble_add_buffer_start)
+							ble_add_buffer_start += length;
+						}
+						ble_add_buffer_start = 0;
+						ble_add_buffer_end = ADDRESS_BUFFER_DATA_START;
+						APP_FLAG_CLEAR_CUSTOM(FULL_DATA_BUFFER);
+						NVIC_EnableIRQ(UART_IRQn);
+					}
 				}
-				
 			}
+			APP_FLAG_CLEAR_CUSTOM(READ_DATA_ECG);
 			
-			/* Application delay before next one shot measurement */
-			//SdkDelayMs(4);
-			
-			/* Start new conversion */
-			ADC_ENABLE();
 		}
+		ADC_ENABLE();
 	}
-	
 }
 
 

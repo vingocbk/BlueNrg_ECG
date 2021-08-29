@@ -11,8 +11,8 @@
 
 uint16_t chatServHandle, TXCharHandle, RXCharHandle;
 //------------------------custom------------
-
-
+extern volatile uint16_t ble_add_buffer_start, ble_add_buffer_end;
+extern volatile uint16_t freqReadEcg;
 //------------------------------------------
 /* UUIDs */
 Service_UUID_t service_uuid;
@@ -75,15 +75,60 @@ void Attribute_Modified_CB(uint16_t handle, uint16_t data_length, uint8_t *att_d
     for(int i = 0; i < data_length; i++)
 		{
       printf("%c", att_data[i]);
-			if(att_data[0] == 's')
+			switch(att_data[0])
 			{
-				printf("Start Send data\n");
-				APP_FLAG_SET_CUSTOM(SEND_DATA_TO_APP_ENABLE);
-			}
-			else if(att_data[0] == 't')
-			{
-				printf("Stop Send data\n");
-				APP_FLAG_CLEAR_CUSTOM(SEND_DATA_TO_APP_ENABLE);
+				case 's':
+					printf("Start Send Data\n");
+					APP_FLAG_SET_CUSTOM(SEND_DATA_TO_APP_ENABLE);
+					break;
+				case 't':
+					printf("Stop Send Data\n");
+					APP_FLAG_CLEAR_CUSTOM(SEND_DATA_TO_APP_ENABLE);
+					break;
+				case 'u':
+					printf("Mode Real Time\n");
+					APP_FLAG_SET_CUSTOM(MODE_SEND_REAL_TIME);
+					break;
+				case 'v':
+					printf("Mode Not Real Time\n");
+					APP_FLAG_CLEAR_CUSTOM(MODE_SEND_REAL_TIME);
+					ble_add_buffer_start = 0;
+					ble_add_buffer_end = ADDRESS_BUFFER_DATA_START;
+					break;
+				case '0':
+					printf("frequency_125\n");
+					freqReadEcg = FREQ_READ_ECG_125;
+					APP_FLAG_SET_CUSTOM(FREQ_125);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_250);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_500);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_1000);
+					break;
+				case '1':
+					printf("frequency_250\n");
+					freqReadEcg = FREQ_READ_ECG_250;
+					APP_FLAG_CLEAR_CUSTOM(FREQ_125);
+					APP_FLAG_SET_CUSTOM(FREQ_250);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_500);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_1000);
+					break;
+				case '2':
+					printf("frequency_500\n");
+					freqReadEcg = FREQ_READ_ECG_500;
+					APP_FLAG_CLEAR_CUSTOM(FREQ_125);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_250);
+					APP_FLAG_SET_CUSTOM(FREQ_500);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_1000);
+					break;
+				case '3':
+					printf("frequency_1000\n");
+					freqReadEcg = FREQ_READ_ECG_1000;
+					APP_FLAG_CLEAR_CUSTOM(FREQ_125);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_250);
+					APP_FLAG_CLEAR_CUSTOM(FREQ_500);
+					APP_FLAG_SET_CUSTOM(FREQ_1000);
+					break;
+				default:
+					break;
 			}
 		}
 			

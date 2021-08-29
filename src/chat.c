@@ -159,7 +159,7 @@ void Send_Data_Over_BLE(void)
     return;
   
   while(cmd_buff_start < cmd_buff_end){
-    uint32_t len = MIN(25, cmd_buff_end - cmd_buff_start);
+    uint32_t len = MIN(20, cmd_buff_end - cmd_buff_start);
     
 #if SERVER
     if(aci_gatt_update_char_value_ext(connection_handle,chatServHandle,TXCharHandle,1,len,0, len,(uint8_t *)cmd+cmd_buff_start)==BLE_STATUS_INSUFFICIENT_RESOURCES){ 
@@ -438,7 +438,8 @@ void hci_disconnection_complete_event(uint8_t Status,
                                       uint8_t Reason)
 {
 	printf ("hci_disconnection_complete_event\r\n");
-   APP_FLAG_CLEAR(CONNECTED);
+  APP_FLAG_CLEAR(CONNECTED);
+	APP_FLAG_CLEAR_CUSTOM(SEND_DATA_TO_APP_ENABLE);
   /* Make the device connectable again. */
   APP_FLAG_SET(SET_CONNECTABLE);
   APP_FLAG_CLEAR(NOTIFICATIONS_ENABLED);
@@ -473,14 +474,7 @@ void aci_gatt_attribute_modified_event(uint16_t Connection_Handle,
 #if ST_OTA_FIRMWARE_UPGRADE_SUPPORT
   OTA_Write_Request_CB(Connection_Handle, Attr_Handle, Attr_Data_Length, Attr_Data);
 #endif /* ST_OTA_FIRMWARE_UPGRADE_SUPPORT */ 
-	static uint16_t data = 1500;
-	data++;
-	static uint8_t a[2];
-  //aci_gatt_update_char_value_ext(connection_handle,chatServHandle,TXCharHandle,1,1,0, 1,a);
-	a[0] = data >> 8;
-	a[1] = data & 0x00FF;
-	printf ("aci_gatt_attribute_modified_event data = %d\r\n", data);
-	aci_gatt_update_char_value(chatServHandle,TXCharHandle,0,2,a);
+
   Attribute_Modified_CB(Attr_Handle, Attr_Data_Length, Attr_Data);   
 
 }

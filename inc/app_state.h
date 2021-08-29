@@ -42,8 +42,25 @@ extern volatile int app_flags_custom;
 #define SEND_DATA               0x40
 
 //------STATUS CUSTOM----------
-#define SEND_DATA_TO_APP_ENABLE          	0x01
-#define SEND_DATA_TO_BUFFER         			0x02
+#define SEND_DATA_TO_APP_ENABLE          	0x01			//if enable will turn on mode send data to App
+#define MODE_SEND_REAL_TIME								0x02			//check send all buffer
+#define READ_DATA_ECG         						0x04			//every freq (default 4ms) send data to buffer
+#define FULL_DATA_BUFFER									0x08			//if full buffer will send data to App
+#define FREQ_125													0x10			//125 time per second
+#define FREQ_250													0x20			//250 time per second
+#define FREQ_500													0x40			//500 time per second
+#define FREQ_1000													0x80			//1000s time per second
+
+#define FREQ_READ_ECG_125 	8 //8ms
+#define FREQ_READ_ECG_250 	4 //4ms
+#define FREQ_READ_ECG_500 	2 //2ms
+#define FREQ_READ_ECG_1000 	1 //1ms
+
+#define ADDRESS_BUFFER_DATA_START				0
+#define ADDRESS_BUFFER_SYNC_START				0
+#define DATA_BUFFER_SYNC_START					0xFF
+#define DATA_BUFFER_SYNC_STOP						0x7F
+
 
 
 /* Added flags for handling TX, RX characteristics discovery */
