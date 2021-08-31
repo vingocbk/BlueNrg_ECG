@@ -50,6 +50,8 @@ extern volatile int app_flags_custom;
 #define FREQ_250													0x20			//250 time per second
 #define FREQ_500													0x40			//500 time per second
 #define FREQ_1000													0x80			//1000s time per second
+#define READ_BATTERY_LEVEL								0x100			//read battery level from app
+
 
 #define FREQ_READ_ECG_125 	8 //8ms
 #define FREQ_READ_ECG_250 	4 //4ms

@@ -419,7 +419,7 @@ void hci_le_connection_complete_event(uint8_t Status,
   connection_handle = Connection_Handle;
   
   APP_FLAG_SET(CONNECTED);
-  
+  //APP_FLAG_SET_CUSTOM(READ_BATTERY_LEVEL);
 #if REQUEST_CONN_PARAM_UPDATE
   APP_FLAG_CLEAR(L2CAP_PARAM_UPD_SENT);
   Timer_Set(&l2cap_req_timer, CLOCK_SECOND*2);

@@ -242,11 +242,12 @@ extern volatile uint16_t connection_handle;
 #define PRINT_FLOAT(x)  (x>0)? ((int) (((x) - PRINT_INT(x)) * 1000)) : (-1*(((int) (((x) - PRINT_INT(x)) * 1000))))
 
 
-#define DATA_SEND_BUFFER_SIZE 	2048
+#define DATA_SEND_BUFFER_SIZE 	512
 
 
 
-#define DATA_
+#define PIN_L0_UP			GPIO_Pin_13
+#define PIN_L0_DOWN		GPIO_Pin_14
 
 /* Private macro -------------------------------------------------------------*/
 #define ADC_CONVERSION    (ADC_ConversionMode_Single)
@@ -256,18 +257,21 @@ extern volatile uint16_t connection_handle;
 
 #define ADC_CHECK_FLAG        (ADC_GetFlagStatus(ADC_FLAG_EOC))
 /* Private variables ---------------------------------------------------------*/
-volatile uint32_t lSystickCounter=0;
+volatile uint32_t lSystickCounter = 0;
+volatile uint32_t check_send_battery = 0;
 volatile uint16_t freqReadEcg = FREQ_READ_ECG_250;
 volatile uint16_t ble_add_buffer_start = 0, ble_add_buffer_end = ADDRESS_BUFFER_DATA_START;
 static uint8_t bufferSend[DATA_SEND_BUFFER_SIZE];		
 volatile uint16_t dataEcg=0;
+volatile uint16_t dataBatteryLevel=0;
 volatile BOOL sendataflag = FALSE;
-ADC_InitType xADC_InitType;
+ADC_InitType xADC_InitType_Ecg, xADC_InitType_Battery;
 /* Private function prototypes -----------------------------------------------*/
 void SdkDelayMs(volatile uint32_t lTimeMs);
 void ADC_Configuration(void);
 void ADC_NVIC_Configuration(void);
 void Read_ADC(void);
+void Send_Battery(void);
 /* Private functions ---------------------------------------------------------*/
 
 
@@ -291,15 +295,13 @@ int main(void)
   SdkEvalComIOConfig(Process_InputData);
 	
 	GPIO_InitType GPIO_InitStructure;
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13 | GPIO_Pin_14;
+	GPIO_InitStructure.GPIO_Pin = PIN_L0_UP | PIN_L0_DOWN;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Input;
 	GPIO_InitStructure.GPIO_Pull = DISABLE;
 	GPIO_InitStructure.GPIO_HighPwr = DISABLE;
 	GPIO_Init(&GPIO_InitStructure);
 	
-	if(ADC_SwCalibration())
-    printf("No calibration points found. SW compensation cannot be done.\r\n");
-	
+
 	
 	  /* ADC Initialization */
   ADC_CONFIGURATION();
@@ -349,6 +351,10 @@ int main(void)
 		{
 			Read_ADC();
 		}
+		if(APP_FLAG(CONNECTED) && APP_FLAG_CUSTOM(READ_BATTERY_LEVEL))
+		{
+			Send_Battery();
+		}
 		
 #if ST_OTA_FIRMWARE_UPGRADE_SUPPORT
     /* Check if the OTA firmware upgrade session has been completed */
@@ -383,7 +389,7 @@ void Read_ADC(void)
 	{
 		if(APP_FLAG_CUSTOM(READ_DATA_ECG))
 		{
-			//if(GPIO_ReadBit(GPIO_Pin_13)==Bit_SET || GPIO_ReadBit(GPIO_Pin_14)==Bit_SET)
+			//if(GPIO_ReadBit(PIN_L0_UP)==Bit_SET || GPIO_ReadBit(PIN_L0_DOWN)==Bit_SET)
 			if(0)
 			{
 				printf("!\r\n");
@@ -391,7 +397,7 @@ void Read_ADC(void)
 			else
 			{
 				/* Read converted data */
-				adc_value = ADC_GetConvertedData(xADC_InitType.ADC_Input, xADC_InitType.ADC_ReferenceVoltage);
+				adc_value = ADC_GetConvertedData(xADC_InitType_Ecg.ADC_Input, xADC_InitType_Ecg.ADC_ReferenceVoltage);
 				//dataEcg = (uint16_t)(ADC_CompensateOutputValue(adc_value)*1000.0);
 				dataEcg++;
 				uint8_t byteSend[2];
@@ -447,6 +453,31 @@ void Read_ADC(void)
 }
 
 
+/*******************************************************************************
+* Function Name  : Send_Battery.
+* Description    : read adc Battery. It should be called when data are received.
+* Return         : none.
+*******************************************************************************/
+void Send_Battery(void)
+{
+	float adc_value = 0.0;
+	//printf("%d\r\n", dataEcg);
+	if(ADC_CHECK_FLAG)
+	{
+		adc_value = ADC_GetConvertedData(xADC_InitType_Battery.ADC_Input, xADC_InitType_Battery.ADC_ReferenceVoltage);
+		dataBatteryLevel = (uint16_t)(ADC_CompensateOutputValue(adc_value)*1000.0);
+		uint8_t byteSend[3];
+		byteSend[0] = 0xFF;
+		byteSend[1] = dataBatteryLevel >> 8;
+		byteSend[2] = dataBatteryLevel & 0x00FF;
+		printf("%d\r\n", dataBatteryLevel);
+		aci_gatt_update_char_value(chatServHandle,TXCharHandle,0,3,byteSend);
+		APP_FLAG_CLEAR_CUSTOM(READ_BATTERY_LEVEL);
+		ADC_ENABLE(); 
+
+	}
+}
+
 /**
 * @brief  Delay function in ms.
 * @param  lTimeMs time in ms
@@ -475,17 +506,29 @@ void SdkDelayMs(volatile uint32_t lTimeMs)
 */
 void ADC_Configuration(void)
 { 
+	if(ADC_SwCalibration()){
+    printf("No calibration points found. SW compensation cannot be done.\r\n");
+	}
   SysCtrl_PeripheralClockCmd(CLOCK_PERIPH_ADC, ENABLE);
   
-  /* Configure ADC */
-  xADC_InitType.ADC_OSR = ADC_OSR_200;
+  /* Configure ADC ECG*/
+  xADC_InitType_Ecg.ADC_OSR = ADC_OSR_200;
   //ADC_Input_BattSensor; //ADC_Input_TempSensor;// ADC_Input_AdcPin1 // ADC_Input_AdcPin12 // ADC_Input_AdcPin2
-  xADC_InitType.ADC_Input = ADC_Input_AdcPin12;
-  xADC_InitType.ADC_ConversionMode = ADC_CONVERSION;
-  xADC_InitType.ADC_ReferenceVoltage = ADC_ReferenceVoltage_0V6;
-  xADC_InitType.ADC_Attenuation = ADC_Attenuation_9dB54;
+  xADC_InitType_Ecg.ADC_Input = ADC_Input_AdcPin12;
+  xADC_InitType_Ecg.ADC_ConversionMode = ADC_CONVERSION;
+  xADC_InitType_Ecg.ADC_ReferenceVoltage = ADC_ReferenceVoltage_0V6;
+  xADC_InitType_Ecg.ADC_Attenuation = ADC_Attenuation_9dB54;
   
-  ADC_Init(&xADC_InitType);
+  ADC_Init(&xADC_InitType_Ecg);
+	
+	  /* Configure ADC BATTERY*/
+  xADC_InitType_Battery.ADC_OSR = ADC_OSR_200;
+  xADC_InitType_Battery.ADC_Input = ADC_Input_BattSensor;
+  xADC_InitType_Battery.ADC_ConversionMode = ADC_CONVERSION;
+  xADC_InitType_Battery.ADC_ReferenceVoltage = ADC_ReferenceVoltage_0V6;
+  xADC_InitType_Battery.ADC_Attenuation = ADC_Attenuation_9dB54;
+  
+  ADC_Init(&xADC_InitType_Battery);
   
   /* Enable auto offset correction */
   ADC_AutoOffsetUpdate(ENABLE);

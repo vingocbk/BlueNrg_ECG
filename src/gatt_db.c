@@ -127,6 +127,10 @@ void Attribute_Modified_CB(uint16_t handle, uint16_t data_length, uint8_t *att_d
 					APP_FLAG_CLEAR_CUSTOM(FREQ_500);
 					APP_FLAG_SET_CUSTOM(FREQ_1000);
 					break;
+				case 'b':
+					printf("Read Battery Level\n");
+					APP_FLAG_SET_CUSTOM(READ_BATTERY_LEVEL);
+					break;
 				default:
 					break;
 			}

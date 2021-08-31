@@ -46,6 +46,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 extern uint32_t lSystickCounter;
+extern uint32_t check_send_battery;
 extern volatile uint8_t freqReadEcg;
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -98,6 +99,14 @@ void SysTick_Handler(void)
 		{
 			lSystickCounter = 0;
 			APP_FLAG_SET_CUSTOM(READ_DATA_ECG);
+		}
+	}
+	
+	if(APP_FLAG(CONNECTED)){
+		check_send_battery++;
+		if(check_send_battery >= 5000){		//5s
+			APP_FLAG_SET_CUSTOM(READ_BATTERY_LEVEL);
+			check_send_battery = 0;
 		}
 	}
 
